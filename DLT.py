@@ -132,12 +132,6 @@ def decode_proto(version_id, schema_str, binary_value):
 
 # COMMAND ----------
 
-# DBTITLE 1,Register the previous function as a Spark UDF
-decode_proto_udf = fn.udf(lambda x,y,z : decode_proto(x, y, z), spark_schema)
-spark.udf.register("decode_proto_udf", f=decode_proto_udf)
-
-# COMMAND ----------
-
 # DBTITLE 1,Find starting and ending version details from the Schema Registry
 src = SchemaRegistryClient(schema_registry_conf)
 raw_versions = src.get_versions(f"{KAFKA_TOPIC}-value")
@@ -165,6 +159,12 @@ spark_schema = mc.get_spark_schema(p.DESCRIPTOR)
   
 df_schemas = spark.createDataFrame(data=schemas, schema="valueSchemaId BIGINT, schema_str STRING")
 
+
+# COMMAND ----------
+
+# DBTITLE 1,Register the previous function as a Spark UDF
+decode_proto_udf = fn.udf(lambda x,y,z : decode_proto(x, y, z), spark_schema)
+spark.udf.register("decode_proto_udf", f=decode_proto_udf)
 
 # COMMAND ----------
 
