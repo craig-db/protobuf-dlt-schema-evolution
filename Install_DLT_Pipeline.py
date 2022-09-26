@@ -1,4 +1,8 @@
 # Databricks notebook source
+# MAGIC %pip install databricks_cli
+
+# COMMAND ----------
+
 # DBTITLE 1,Adjust this value to avoid conflicts. It will be the Pipeline that you see in "Workflows"->"Delta Live Tables"
 PIPELINE_NAME = "CraigLukasikProtoExample"
 
