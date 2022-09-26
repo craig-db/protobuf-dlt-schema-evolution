@@ -16,7 +16,7 @@ Go here to learn how to save secrets: https://docs.databricks.com/security/secre
 
 # Notebook overview
 * The "Producer" notebook creates simulated messages and sends them to a Kafka topic. Use the widget values to increase the number of different schema versions used in the flow and the number of records sent per notebook run.
-* The "DLT" notebook will be installed as a Continuous notebook.
+* The "DLT" notebook will be installed as a Continuous DLT Pipeline.
 * The "Install_DLT_Pipeline" notebook will install the aforementioned DLT notebook.
 
 # Instructions
