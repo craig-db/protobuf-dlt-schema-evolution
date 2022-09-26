@@ -24,5 +24,10 @@ Go here to learn how to save secrets: https://docs.databricks.com/security/secre
 2. Run the "Install_DLT_Pipeline" notebook.
 3. Go back to the "Producer" notebook. Adjust the widget values (e.g. increase the number of versions). Ideally: you should be able to see the job automatically restart the pipeline. However, a bug currently prevents that automatic restart. To remediate this bug, you can have a separate job monitor the pipeline and restart it.
 
+# How it works
+* When the DLT pipeline starts, it sets an expectation on the current maximum version schema identifier that it received from a call to the Confluent Schema Registry.
+* When the DLT expectation fails, the pipeline should restart itself. Note: as of the writing of this document, a bug is currently preventing that restart from happening; there are work-arounds for this.
+* The reason the stream restarts is so that the target sink schema can get updated to the latest schema from the Schema Registry.
+
 ### Clean up
 Stop and delete the job, pipeline and drop the target schema.
