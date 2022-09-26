@@ -65,10 +65,12 @@ from cachetools import cached
 
 # COMMAND ----------
 
+# DBTITLE 1,Transform the binary payload into a String
 binary_to_string = fn.udf(lambda x: str(int.from_bytes(x, byteorder='big')), StringType())
 
 # COMMAND ----------
 
+# DBTITLE 1,Return the Python class for the associated schema; compile proto defn. with protoc, if the Python class is not detected
 def get_message_type(version_id, schema_str):
   mod_name = f'destination_{version_id}_pb2'
 
@@ -94,6 +96,7 @@ def get_message_type(version_id, schema_str):
 
 # COMMAND ----------
 
+# DBTITLE 1,Helper to find the Python class in the module that was created by protoc
 import sys, inspect
 def get_proto_class(pkg):
     for name, obj in inspect.getmembers(pkg):
@@ -103,6 +106,7 @@ def get_proto_class(pkg):
 
 # COMMAND ----------
 
+# DBTITLE 1,Decode the incoming payload and return a dictionary
 def decode_proto(version_id, schema_str, binary_value):
   import os, pbspark, shutil
   # print(f"CALL decode_proto with version_id: {version_id}, schema_str: {schema_str}, binary_value: {binary_value}")
@@ -128,6 +132,13 @@ def decode_proto(version_id, schema_str, binary_value):
 
 # COMMAND ----------
 
+# DBTITLE 1,Register the previous function as a Spark UDF
+decode_proto_udf = fn.udf(lambda x,y,z : decode_proto(x, y, z), spark_schema)
+spark.udf.register("decode_proto_udf", f=decode_proto_udf)
+
+# COMMAND ----------
+
+# DBTITLE 1,Find starting and ending version details from the Schema Registry
 src = SchemaRegistryClient(schema_registry_conf)
 raw_versions = src.get_versions(f"{KAFKA_TOPIC}-value")
 latest_id = src.get_latest_version(f"{KAFKA_TOPIC}-value").schema_id
@@ -136,6 +147,7 @@ print(f"starting_id: {starting_id}, latest_id: {latest_id}")
 
 # COMMAND ----------
 
+# DBTITLE 1,A helper DataFrame to help convey the proto schema to workers consuming the stream
 idx = 0
 schemas = list()
 for version_id in range(starting_id, latest_id + 1):
@@ -152,11 +164,11 @@ mc = pbspark.MessageConverter()
 spark_schema = mc.get_spark_schema(p.DESCRIPTOR)
   
 df_schemas = spark.createDataFrame(data=schemas, schema="valueSchemaId BIGINT, schema_str STRING")
-decode_proto_udf = fn.udf(lambda x,y,z : decode_proto(x, y, z), spark_schema)
-spark.udf.register("decode_proto_udf", f=decode_proto_udf)
+
 
 # COMMAND ----------
 
+# DBTITLE 1,The source view, using an expectation to fail the stream once a new version is detected
 @dlt.view
 @dlt.expect_or_fail("expected protobuf version", f"valueSchemaId <= {latest_id}")
 def kafka_source_table():
@@ -181,6 +193,7 @@ df_schemas.createOrReplaceTempView("proto_schemas")
 
 # COMMAND ----------
 
+# DBTITLE 1,Gold table with the transformed protobuf messages surfaced in a Delta table
 @dlt.table
 def gold_unified():
   return spark.sql("""

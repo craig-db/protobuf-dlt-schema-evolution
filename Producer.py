@@ -1,4 +1,5 @@
 # Databricks notebook source
+# DBTITLE 1,Get latest protobuf, pbspark and confluent_kafka libraries
 # MAGIC %pip install --upgrade protobuf
 
 # COMMAND ----------
@@ -11,12 +12,21 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Variables for the producer
-NUM_VERSIONS=6
-NUM_RECORDS_PER_VERSION=10
+vdd = [str(i) for i in range(1, 10)]
+nrec = [str(i) for i in range(10, 110, 10)]
+dbutils.widgets.dropdown(name="num_versions", label="Number of Versions to Produce", defaultValue="2", choices=vdd)
+dbutils.widgets.dropdown(name="num_records", label="Number of Records to Produce per Version", defaultValue="10", choices=nrec)
 
 # COMMAND ----------
 
+# DBTITLE 1,Variables for the producer
+NUM_VERSIONS=int(dbutils.widgets.get("num_versions"))
+NUM_RECORDS_PER_VERSION=int(dbutils.widgets.get("num_records"))
+print(f"This run will produce {NUM_RECORDS_PER_VERSION} for each of the {NUM_VERSIONS} versions")
+
+# COMMAND ----------
+
+# DBTITLE 1,Template of the protobuf definition that will be used to evolve
 protodef = """
 syntax = "proto2";
 
@@ -33,6 +43,7 @@ message Person {{
 
 # COMMAND ----------
 
+# DBTITLE 1,Install protoc, if not found. Also save to dbfs so it can be used in the DLT 'init script'
 init_script_contents = """
 #!/bin/sh
 
@@ -57,6 +68,7 @@ dbutils.fs.put("dbfs:/FileStore/install_proto.sh", init_script_contents, True)
 
 # COMMAND ----------
 
+# DBTITLE 1,Get Confluent Registry and Kafka related secrets
 SR_URL = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_URL")
 SR_API_KEY = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_KEY")
 SR_API_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_SECRET")
@@ -67,6 +79,7 @@ KAFKA_TOPIC = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_TOP
 
 # COMMAND ----------
 
+# DBTITLE 1,Prepare config dictionaries, as expected by the confluent library
 # Required connection configs for Kafka producer, consumer, and admin
 
 config = {
@@ -94,6 +107,7 @@ import importlib
 
 # COMMAND ----------
 
+# DBTITLE 1,A helper function used to "evolve" the protobuf schema
 def get_schema_str(version):
   extras = list()
   for i in range(0, version + 1):
@@ -103,6 +117,7 @@ def get_schema_str(version):
 
 # COMMAND ----------
 
+# DBTITLE 1,Simulate an instance of the target class after compiling the protobuf schema
 def generate_proto(schema_str, version_id):
   mod_name = f'destination_{version_id}_pb2'
   if (mod_name in sys.modules):
@@ -140,6 +155,7 @@ schema_registry_client = SchemaRegistryClient(schema_registry_conf)
 
 # COMMAND ----------
 
+# DBTITLE 1,Create the Kafka topic for the simulation
 a = AdminClient(config)
 
 fs = a.create_topics([NewTopic(
@@ -150,6 +166,7 @@ fs = a.create_topics([NewTopic(
 
 # COMMAND ----------
 
+# DBTITLE 1,Send simulated payload messages (with evolving schema) to Kafka
 for version in range(0, NUM_VERSIONS):
   print(f"prep version {version}")
   schema_str = get_schema_str(version)
