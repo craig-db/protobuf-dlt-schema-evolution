@@ -110,11 +110,6 @@ def get_proto_class(pkg):
 def decode_proto(version_id, schema_str, binary_value):
   import os, pbspark, shutil
   # print(f"CALL decode_proto with version_id: {version_id}, schema_str: {schema_str}, binary_value: {binary_value}")
-  
-  if schema_str == None:
-    print(f"null schema string for version {version_id}")
-    schema_str = get_schema_str(version_id)
-    print(f"Found schema for version {version_id}: {schema_str}")
   mc = pbspark.MessageConverter()
   pkg = get_message_type(version_id, schema_str)
   p = get_proto_class(pkg)
