@@ -22,7 +22,7 @@ dbutils.widgets.dropdown(name="num_records", label="Number of Records to Produce
 # DBTITLE 1,Variables for the producer
 NUM_VERSIONS=int(dbutils.widgets.get("num_versions"))
 NUM_RECORDS_PER_VERSION=int(dbutils.widgets.get("num_records"))
-print(f"This run will produce {NUM_RECORDS_PER_VERSION} for each of the {NUM_VERSIONS} versions")
+print(f"This run will produce {NUM_RECORDS_PER_VERSION} messages for each of the {NUM_VERSIONS} versions")
 
 # COMMAND ----------
 
