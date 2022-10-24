@@ -180,3 +180,7 @@ for version in range(0, NUM_VERSIONS):
     print(f"publishing {str(protoclass)}")
     ret = producer.produce(KAFKA_TOPIC, key=f"{version}.{rec}", value=protoclass)
   producer.flush()
+
+# COMMAND ----------
+
+
