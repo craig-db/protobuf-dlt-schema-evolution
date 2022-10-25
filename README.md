@@ -113,7 +113,7 @@ Note: in DLT, you can configure the init script up by editing the JSON definitio
 <br/>
 
 ```
-  def get_message_type(version_id, schema_str):
+def get_message_type(version_id, schema_str):
   mod_name = f'destination_{version_id}_pb2'
 
   tmpdir = "/tmp"
