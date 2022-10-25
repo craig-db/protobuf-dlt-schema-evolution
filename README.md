@@ -48,7 +48,7 @@ So, DLT is a natural choice for long-running streaming workloads with variable v
 Earlier we briefly described protobuf schema and how the protocol definition must be compiled into classes (e.g. Python or Java). The presents a challenge for those trying to design a continuously streaming application that handles the evolution of the schema.
 
 ### Exploring Payload Formats for IoT Streaming Data
-Before proceed, it is worth mentioning that JSON or Avro may be suitable alternatives for streaming payload. These formats offer benefits that, for some use cases, may outweigh protobuf.
+Before we proceed, it is worth mentioning that JSON or Avro may be suitable alternatives for streaming payload. These formats offer benefits that, for some use cases, may outweigh protobuf's.
 #### JSON
 JSON is a great format for development because it is mostly human-readable. The other formats we'll explore are binary formats and require tools to inspect the underlying data values. Unlike Avro and protobuf, however, the JSON document is stored as a large string (potentially compressed) and this means more bytes may be used than what a value actually represents. Consider the short int value of 8. A short int typically requires two bytes. In JSON, you may have a document that looks like the following, and it will require a number of bytes for the associated key, quotes, etc.:
 ```
