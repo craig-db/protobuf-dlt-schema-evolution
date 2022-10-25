@@ -27,7 +27,7 @@ Databricks Lakehouse provides capabilities that help optimize the AI journey by 
 The remainder of this blog post will focus on using an optimized format, created by Google, called [protocol buffers](https://developers.google.com/protocol-buffers). It will also explain how to harness the power of [Databricks Delta Live Tables](https://www.databricks.com/product/delta-live-tables) for its [autoscaling capabilities](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#databricks-enhanced-autoscaling) and ETL pipeline features, such as [orchestration, cluster management, monitoring, data quality, and error handling](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html). Lastly, this blog post will explore the concept of [schema evolution](https://docs.databricks.com/ingestion/auto-loader/schema.html#how-does-auto-loader-schema-evolution-work) in the context of streaming workloads.
 
 ### What Makes Protobuf an "Optimized" Serialization Format?
-Google enumerates the [advantages of protocol](https://developers.google.com/protocol-buffers/docs/overview) buffers as follows:
+Google enumerates the [advantages of protocol buffers](https://developers.google.com/protocol-buffers/docs/overview) as follows:
 * Compact data storage
 * Fast parsing
 * Availability in many programming languages
