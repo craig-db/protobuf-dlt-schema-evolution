@@ -80,7 +80,7 @@ df = spark.read.format("avro").load("example.avro")
 [This datageeks.com article](https://dataforgeeks.com/data-serialisation-avro-vs-protocol-buffers/2015/) compares Avro and protobuf. It is worth a read, if you are on the fence between Avro and protbuf. Regarding performance, it describes protobuf as the "fastest amongst all". If speed outweighs other considerations, such as JSON and Avro's greater simplicity, protobuf may be the best choice.
 
 # Overcoming Challenges when using Protobuf
-Let's summarize some of the challenges that briefly touched upon earlier:
+Let's summarize some of the challenges that were briefly touched upon earlier:
 * Programs that leverage protobuf have to work with classes that were compiled using protoc. The protoc compiler is not installed, by default, on Databricks clusters
 * No built-in support in Spark (as of 2022) for consuming protobuf.
 * In a streaming application with protobuf messages that have evolving schema, protoc has to be leveraged as the application runs
