@@ -93,8 +93,11 @@ The `protoc` call is costly, so we want to minimize the use. Ideally, it should 
 ### Solution
 To solve the challenge, the following is needed:
 1. The protobuf compiler needs to be installed on the cluster. To solve this, an [init script](https://docs.databricks.com/clusters/init-scripts.html) can be used to manage the installation of the protoc compiler on the cluster's worker nodes. The script will be run as new nodes are provisioned and before the worker is made available to the Spark runtime.
-</br>
+
+<br/>
 *Code Example: init script to install the protobuf compiler*
+<br/>
+
 ```
 #!/bin/sh
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
@@ -104,8 +107,11 @@ unzip protoc-21.5-linux-x86_64.zip -d /usr/local/
 Note: in DLT, you can configure the init script up by editing the JSON definition of the DLT pipeline.
 
 2. As micro batches are processed, DLT may scale the cluster up or down. This means that the ability to receive the binary payload and decode it (using a compiled protobuf schema) needs to avoid the need to recompile the protobuf schema repeatedly. To address this, a function like the one below can help ensure the compiling action is minimized (by checking for the existence of the generated Python class). When used within an UDF, the distribution of the logic to new nodes will ensure the compilation happens once.
-</br>
+
+<br/>
 *Code Example: Compile once*
+<br/>
+
 ```
   def get_message_type(version_id, schema_str):
   mod_name = f'destination_{version_id}_pb2'
@@ -139,8 +145,12 @@ The schema of the protobuf messages may evolve over time. Also, at any given tim
 ### Solution
 To handle schema evolution, the following steps are taken:
 Upon pipeline initialization, a call is made to the Confluent Schema Registry. This latest known schema version is captured.
-</br>
+
+
+<br/>
 *Code Example: get latest schema_id from the Schema Registry*
+<br/>
+
 ```
 src = SchemaRegistryClient(schema_registry_conf)
 raw_versions = src.get_versions(f"{TOPIC}-value")
