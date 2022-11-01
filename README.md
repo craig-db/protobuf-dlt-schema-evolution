@@ -1,4 +1,5 @@
 # Stream to Delta Lake with an optimized payload format: protocol buffers
+![overview](./resources/overview.png)
 The [Lakehouse platform](https://www.databricks.com/product/data-lakehouse) is a unified Data-to-AI platform for the enterprise where data engineers, data analysts, business analysts, and data scientists collaborate in a single platform. Streaming workloads in [Delta Live Tables](https://www.databricks.com/product/delta-live-tables) pipelines can power near real-time prescriptive and [predictive analytics](https://www.databricks.com/glossary/predictive-analytics) and automatically retrain Machine Learning (ML) models using [Databricks built-in MLOps support](https://www.databricks.com/blog/2022/06/22/architecting-mlops-on-the-lakehouse.html). The models can be exposed as [scalable, serverless REST end-points](https://docs.databricks.com/mlflow/serverless-real-time-inference.html), all within the Databricks platform.
 
 The data that makes up these streaming workloads may have many origins, from a variety of use cases. Examples of streaming use cases include:
