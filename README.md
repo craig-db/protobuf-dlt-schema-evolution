@@ -1,4 +1,4 @@
-# Stream Data with an Evolving Schema to Delta Lake using an Optimized Payload Format: Protocol Buffers and 
+# Stream Data with an Evolving Schema to Delta Lake using an Optimized Payload Format: Protocol Buffers 
 ![overview](./resources/overview.png)
 Descriptions for the numbered, yellow circles:
 1. A Schema Registry, such as [Confluent's Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html), provides a metadata service for streaming message services, such as Confluent's implementation of [Apache Kafka](https://kafka.apache.org/). For protobuf messages, where the payload that streams does not include a schema definition, a Schema Registry provides a way for message producers and consumers to be aware of the message fields. Confluent's Schema Registry supports schema evolution; each schema version has its own Schema Id.
