@@ -54,7 +54,7 @@ Google enumerates the [advantages of protocol buffers](https://developers.google
 * Optimized functionality through automatically-generated classes
 
 A key aspect of the optimization usually involves use of pre-compiled classes that are used in the consumer and producer programs that a developer would write. In a nutshell, consumer and producer programs that leverage protobuf's are "aware" of a message structure, and the binary payload of a protobuf message benefits from:
-* Positioing within the binary message, removing the need for field markers or delimeters
+* Positioning within the binary message, removing the need for field markers or delimeters
 * Primitive data types
 
 The client and producer programs leverage the compiled protobuf descriptions. The [protoc compiler](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) is used to compile those definitons into classes in a variety of languages, including Java and Python. For this example, the DLT code manage the compilation of the protocol definitions, and it will leverage Python as the target language for the compiler. To learn more about how protocol buffers work, go here: https://developers.google.com/protocol-buffers/docs/overview#work.
