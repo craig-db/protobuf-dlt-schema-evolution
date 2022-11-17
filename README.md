@@ -1,6 +1,6 @@
 # Stream Data with an Evolving Schema to Delta Lake using an Optimized Payload Format: Protocol Buffers 
 ![Overview Databricks Lakehouse Architecture depicting Kafka, Schema Registry, Delta Lake, and Delta Live Tables](./resources/overview.png)
-_Descriptions for the numbered, yellow circles are found in the [appendix](#appenmdix)_
+_Descriptions for the numbered, yellow circles are found in the [appendix](#appendix)_
 
 # Learning Objectives
 In this blog post you will learn about:
