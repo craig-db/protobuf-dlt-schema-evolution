@@ -214,6 +214,9 @@ Stop and delete the job, pipeline and drop the target schema.
 # Conclusion
 Optimized IoT systems optimize across the technology stack. In this blog, we reviewed how an optimized serialization format, protobuf, can be leveraged with Delta Live Tables when the protobuf payload has evolving of varying schemas. Delta Live Tables provides an optimized ETL framework for organizing the landed payload, transforming it, and preparing it for consumption in the unified Databricks Lakehouse.
 
+## Repo
+The code for this example is located here in github: https://github.com/craig-db/protobuf-dlt-schema-evolution
+
 # Appendix
 1. A Schema Registry, such as [Confluent's Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html), provides a metadata service for streaming message services, such as Confluent's implementation of [Apache Kafka](https://kafka.apache.org/). For protobuf messages, where the payload that streams does not include a schema definition, a Schema Registry provides a way for message producers and consumers to be aware of the message fields. Confluent's Schema Registry supports schema evolution; each schema version has its own Schema Id.
 2. The program(s) that publish messages to the message bus leverage the Registry Schema, along with a Serializer, to prepare messages for the message bus. In the case of protobuf, Confluent's [ProtobufSerializer](https://docs.confluent.io/platform/current/schema-registry/serdes-develop/serdes-protobuf.html) is leveraged. In this demo, take a look at the [Producer](./Producer.py) notebook to see how simulated messages are generated and published to Kafka.
