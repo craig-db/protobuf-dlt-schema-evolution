@@ -1,4 +1,4 @@
-# Stream Data with an Evolving Schema to Delta Lake using an Optimized Payload Format: Protocol Buffers 
+# Delta Live Tables Consuming Protobuf with an Evolving Schema 
 ![Overview Databricks Lakehouse Architecture depicting Kafka, Schema Registry, Delta Lake, and Delta Live Tables](./resources/overview.png)
 _Descriptions for the numbered, yellow circles are found in the [appendix](#appendix)_
 
@@ -39,15 +39,15 @@ A key aspect of the optimization usually involves use of pre-compiled classes th
 * Positioning within the binary message, removing the need for field markers or delimiters
 * Primitive data types
 
-The client and producer programs leverage the compiled protobuf descriptions. The [protoc compiler](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) is used to compile those definitons into classes in a variety of languages, including Java and Python. For this example, the DLT code manage the compilation of the protocol definitions, and it will leverage Python as the target language for the compiler. To learn more about how protocol buffers work, go here: https://developers.google.com/protocol-buffers/docs/overview#work.
+The client and producer programs leverage the compiled protobuf descriptions. The [protoc compiler](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) is used to compile those definitions into classes in a variety of languages, including Java and Python. For this example, the DLT code manages the compilation of the protocol definitions, and it will leverage Python as the target language for the compiler. To learn more about how protocol buffers work, go here: https://developers.google.com/protocol-buffers/docs/overview#work.
 
 ## Optimizing the Streaming Runtime
-In addition Delta Live Tables (DLT) benefits for ETL development, DLT overcomes a limitation in Spark Structured Streaming archtectures that involves the downscaling of the compute resources (see [“Downscaling: The Achilles heel of Autoscaling Apache Spark Clusters”](https://www.youtube.com/watch?v=XA_oVcoK7b4) for more information). There are some known work-arounds that address the downscaling challenge (for example, [“A Self-Autoscaler for Structured Streaming Applications in Databricks”](https://medium.com/gumgum-tech/a-self-autoscaler-for-structured-streaming-applications-in-databricks-a8bc4601d1d1)). However, these work-arounds require additional complexity, code, and management.
+In addition Delta Live Tables (DLT) benefits for ETL development, DLT overcomes a limitation in Spark Structured Streaming architectures that involves the downscaling of the compute resources (see [“Downscaling: The Achilles heel of Autoscaling Apache Spark Clusters”](https://www.youtube.com/watch?v=XA_oVcoK7b4) for more information). There are some known work-arounds that address the downscaling challenge (for example, [“A Self-Autoscaler for Structured Streaming Applications in Databricks”](https://medium.com/gumgum-tech/a-self-autoscaler-for-structured-streaming-applications-in-databricks-a8bc4601d1d1)). However, these work-arounds require additional complexity, code, and management.
 
 So, DLT is a natural choice for long-running streaming workloads with variable volume. It will scale up and down the compute resources using [Enhanced Autoscaling](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#databricks-enhanced-autoscaling).
 
 ## Handling Payload Schema Evolution
-Earlier we briefly described protobuf schema and how the protocol definition must be compiled into classes (e.g. Python or Java). The presents a challenge for those trying to design a continuously streaming application that handles the evolution of the schema.
+Earlier we briefly described protobuf schema and how the protocol definition must be compiled into classes (e.g. Python or Java). This presents a challenge for those trying to design a continuously streaming application that handles the evolution of the schema.
 
 ### Exploring Payload Formats for IoT Streaming Data
 Before we proceed, it is worth mentioning that JSON or Avro may be suitable alternatives for streaming payload. These formats offer benefits that, for some use cases, may outweigh protobuf's.
@@ -87,7 +87,7 @@ Let's summarize some of the challenges that were briefly touched upon earlier:
 * No built-in support in Spark (as of 2022) for consuming protobuf.
 * In a streaming application with protobuf messages that have evolving schema, protoc has to be leveraged as the application runs
 
-Now, lets walk through these challenges and descibe how they can be overcome.
+Now, let's walk through these challenges and describe how they can be overcome.
 
 ## Compiling the Protobuf Schema
 The `protoc` call is costly, so we want to minimize the use. Ideally, it should be invoked once per schema version id. 
@@ -159,7 +159,7 @@ raw_versions = src.get_versions(f"{TOPIC}-value")
 latest_id = src.get_latest_version(f"{TOPIC}-value").schema_id
 ```
 
-The latest Schema Id is looked up during the startup of the DLT pipeline. If a newer version is detected, the code for the DLT pipeline in this tutorial will cause the pipeline to fail. When in a DLT pipeline is set to run in [Production mode](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#development-and-production-modes) and it fails, the DLT pipeline will eventually restart and will use the newer Schema Id as it sets up the pipeline and target Delta table.
+The latest Schema Id is looked up during the startup of the DLT pipeline. If a newer version is detected, the code for the DLT pipeline in this tutorial will cause the pipeline to fail. When a DLT pipeline is set to run in [Production mode](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#development-and-production-modes) and it fails, the DLT pipeline will eventually restart and will use the newer Schema Id as it sets up the pipeline and target Delta table.
 
 
 # Example Code to Demonstrate Schema-evolving ProtoBuf Messages and Consuming them in Databricks DLT
@@ -169,7 +169,7 @@ The purpose of this prototype is to demonstrate how you can stream protobuf mess
 Example code is provided for demonstration purposes as part of this blog. The code is not an officially supported part of Databricks. It is for instructional purposes only. Although it functioned as part of this blog and tutorial, you may have to work through any issues on your own.
 
 ## The Code Files
-Accompanying this repo, you will find three code files:
+Accompanying [this repo](https://github.com/craig-db/protobuf-dlt-schema-evolution), you will find three code files:
 1. Install_DLT_Pipeline - this notebook should be run to install the DLT pipeline.
 2. Producer - this notebook will generate fake data and is meant to be run multiple times. It provides a way to send `x` number of messages for `y` different schemas. 
 3. DLT - this notebook is the code for the DLT pipeline.
@@ -212,7 +212,7 @@ The code in the example was written and tested using Confluent's hosted Kafka. T
 Stop and delete the job, pipeline and drop the target schema.
 
 # Conclusion
-Optimized IoT systems optimize across the technology stack. In this blog, we reviewed how an optimized serialization format, protobuf, can be leveraged with Delta Live Tables when the protobuf payload has evolving of varying schemas. Delta Live Tables provides an optimized ETL framework for organizing the landed payload, transforming it, and preparing it for consumption in the unified Databricks Lakehouse.
+Optimized IoT systems optimize across the technology stack. In this blog, we reviewed how an optimized serialization format, protobuf, can be leveraged with Delta Live Tables when the protobuf payload has evolving or varying schemas. Delta Live Tables provides an optimized ETL framework for organizing the landed payload, transforming it, and preparing it for consumption in the unified Databricks Lakehouse.
 
 ## Repo
 The code for this example is located here in github: https://github.com/craig-db/protobuf-dlt-schema-evolution
