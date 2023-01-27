@@ -1,3 +1,9 @@
+# Deprecated
+Databricks now has native support for protobuf: https://docs.databricks.com/structured-streaming/protocol-buffers.html
+
+[from_protobuf](https://docs.databricks.com/structured-streaming/protocol-buffers.html) is much more simple than trying to use the approach detailed below. Feel free to continue to read to learn about protobuf, DLT and other Databricks features.
+
+
 # Delta Live Tables Consuming Protobuf with an Evolving Schema 
 ![Overview Databricks Lakehouse Architecture depicting Kafka, Schema Registry, Delta Lake, and Delta Live Tables](./resources/overview.png)
 _Descriptions for the numbered, yellow circles are found in the [appendix](#appendix)_
