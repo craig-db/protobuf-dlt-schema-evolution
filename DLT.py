@@ -1,9 +1,13 @@
 # Databricks notebook source
-# MAGIC %pip install --upgrade  confluent_kafka
+import dlt
 
 # COMMAND ----------
 
-import dlt
+WRAPPER_TOPIC = spark.conf.get("kafka_topic")
+
+# COMMAND ----------
+
+GAMES_ARRAY = spark.conf.get("games").split(",")
 
 # COMMAND ----------
 
@@ -13,7 +17,7 @@ import dlt
 #
 
 # Kafka-related settings
-KAFKA_KEY = dbutils.secrets.get(scope = "dogfood-testing", key = "KAFKA_KEY")
+KAFKA_KEY = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_KEY")
 KAFKA_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_SECRET")
 KAFKA_SERVER = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_SERVER")
 
@@ -39,63 +43,24 @@ config = {
   "session.timeout.ms": "45000"
 }  
 
-#
-# Schema Registry configuration
-#
-# For exploring more security options related to the Schema Registry, go here:
-# https://docs.confluent.io/platform/current/schema-registry/security/index.html
-schema_registry_conf = {
-    'url': SR_URL,
-    'basic.auth.user.info': '{}:{}'.format(SR_API_KEY, SR_API_SECRET)}
-
-# COMMAND ----------
-
-#
-# We assume there will be a topic for each game and that the topic name will be of the format "game-<game name>".
-# This list (GAME_STREAMS) will get populated by finding the topics that are in the schema registry where
-# the topic name matches that format.
-#
-GAME_STREAMS = list()
-
-# COMMAND ----------
-
-from confluent_kafka.schema_registry import SchemaRegistryClient
-
-schema_registry_client = SchemaRegistryClient(schema_registry_conf)
-subjects = schema_registry_client.get_subjects()
-
-for subject in subjects:
-  GAME_STREAMS.append(subject)
+schema_registry_options = {
+  "schema.registry.subject" : f"{WRAPPER_TOPIC}-value",
+  "schema.registry.address" : f"{SR_URL}",
+  "confluent.schema.registry.basic.auth.credentials.source" : "USER_INFO",
+  "confluent.schema.registry.basic.auth.user.info" : f"{SR_API_KEY}:{SR_API_SECRET}"
+}
 
 # COMMAND ----------
 
 # DBTITLE 1,Necessary Imports
-# Source for these libraries can be found here: https://github.com/confluentinc/confluent-kafka-python
-from confluent_kafka import DeserializingConsumer, SerializingProducer
-
-# https://github.com/confluentinc/confluent-kafka-python/tree/master/src/confluent_kafka/admin
-from confluent_kafka.admin import AdminClient, NewTopic
-
-# https://github.com/confluentinc/confluent-kafka-python/tree/master/src/confluent_kafka/schema_registry
-from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
-from confluent_kafka.schema_registry.protobuf import ProtobufSerializer, ProtobufDeserializer
-
-# https://googleapis.dev/python/protobuf/latest/google/protobuf/message_factory.html
-from google.protobuf.message_factory import MessageFactory
-
-import pyspark.sql.functions as fn
-from pyspark.sql.types import StringType, BinaryType
-
-# https://github.com/crflynn/pbspark
-import pbspark
-
-import os, sys, inspect, importlib
+import pyspark.sql.functions as F
+from pyspark.sql.protobuf.functions import from_protobuf
 
 # COMMAND ----------
 
 # DBTITLE 1,The source view, consuming the Kafka messages and decoding the Schema Id of the payload
 @dlt.view
-def kafka_source_table():
+def bronze_events():
   return (
     spark
     .readStream
@@ -105,27 +70,34 @@ def kafka_source_table():
     .option("kafka.sasl.jaas.config", "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';".format(KAFKA_KEY, KAFKA_SECRET))
     .option("kafka.ssl.endpoint.identification.algorithm", "https")
     .option("kafka.sasl.mechanism", "PLAIN")
-    .option("subscribe", KAFKA_TOPIC)
-    .option("mergeSchema", "true")
+    .option("subscribe", WRAPPER_TOPIC)
     .load()
     # The `binary_to_string` UDF helps to extract the Schema Id of each payload:
-    .withColumn('valueSchemaId', binary_to_string(fn.expr("substring(value, 2, 4)")))
+    .withColumn('decoded', from_protobuf(F.col("value"), options = schema_registry_options))
+    .selectExpr("decoded.*")
   )
 
 # COMMAND ----------
 
 # DBTITLE 1,Gold table with the transformed protobuf messages, surfaced in a Delta table
-@dlt.table
-def gold_unified():
-  gold_df = spark.sql("""
-  
-    select a.valueSchemaId,
-           b.schema_str,
-           -- A new version will result in schema_str being NULL, thanks to the OUTER JOIN
-           decode_proto_udf(a.valueSchemaId, b.schema_str, a.value) as decoded
-      from STREAM(LIVE.kafka_source_table) a
-      LEFT OUTER JOIN proto_schemas b on a.valueSchemaId = b.valueSchemaId
-      
-  """)
-  
-  return gold_df.select("decoded.*")
+for game in GAMES_ARRAY:
+  @dlt.table(
+    name = f"silver_{game}_events"
+  )
+  def gold_unified():
+    return dlt.read_stream("bronze_events").where(F.col("game_name") == game)
+
+# COMMAND ----------
+
+for game in GAMES_ARRAY:
+  @dlt.table(
+    name = f"gold_{game}_player_agg"
+  )
+  def gold_unified():
+    return spark.sql(f"""
+      select gamer_id, count(event_timestamp) event_count, 
+             max(event_timestamp) max_event_timestamp, 
+             min(event_timestamp) min_event_timestamp
+        from STREAMING(LIVE.silver_{game}_eventsWRAPPER_TOPIC = "protobuf_game_stream")
+        group by gamer_id
+    """)

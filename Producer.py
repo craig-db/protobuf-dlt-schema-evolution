@@ -1,186 +1,157 @@
 # Databricks notebook source
-# DBTITLE 1,Get latest protobuf, pbspark and confluent_kafka libraries
-# MAGIC %pip install --upgrade protobuf
+# MAGIC %md
+# MAGIC ### Simulator -- publish fake messages to Kafka
+# MAGIC Use this notebook to publish messages to Kafka. Using the widgets:
+# MAGIC 1. You can choose the number of messages to publish for each game 
+# MAGIC 2. You can select the number of versions to generate
+# MAGIC
+# MAGIC The widgets will appear after you run the sixth cell of this notebook. The "Number of versions per game" widget helps to demonstrate schema evolution.
+# MAGIC
+# MAGIC #### Instructions
+# MAGIC Run all the cells, one by one. You can generate more messages by re-running the last cell of this notebook.
 
 # COMMAND ----------
 
-# MAGIC %pip install --upgrade pbspark
+# DBTITLE 1,Confluent_kafka library allows us to create topics and register schemas in Confluent
+# MAGIC %pip install --upgrade confluent_kafka
 
 # COMMAND ----------
 
-# MAGIC %pip install --upgrade  confluent_kafka
+# DBTITLE 1,Faker helps generate fake data for the simulator
+# MAGIC %pip install faker
 
 # COMMAND ----------
 
-vdd = [str(i) for i in range(1, 10)]
-nrec = [str(i) for i in range(10, 110, 10)]
-dbutils.widgets.dropdown(name="num_versions", label="Number of Versions to Produce", defaultValue="2", choices=vdd)
-dbutils.widgets.dropdown(name="num_records", label="Number of Records to Produce per Version", defaultValue="10", choices=nrec)
+# DBTITLE 1,This runs code from another notebook
+# MAGIC %run "./Common"
 
 # COMMAND ----------
 
-# DBTITLE 1,Variables for the producer
-NUM_VERSIONS=int(dbutils.widgets.get("num_versions"))
-NUM_RECORDS_PER_VERSION=int(dbutils.widgets.get("num_records"))
-print(f"This run will produce {NUM_RECORDS_PER_VERSION} messages for each of the {NUM_VERSIONS} versions")
-
-# COMMAND ----------
-
-# DBTITLE 1,Template of the protobuf definition that will be used to evolve
-protodef = """
-syntax = "proto2";
-
-package example{version};
-
-message Person {{
-  optional int64 id = 1;
-  optional string name = 2;
-  optional string email = 3;
-  optional int64 quantity = 4;
-{extras}
-}}
-"""
-
-# COMMAND ----------
-
-# DBTITLE 1,Install protoc, if not found. Also save to dbfs so it can be used in the DLT 'init script'
-init_script_contents = """
-#!/bin/sh
-
-PC=`which protoc`
-if [ $? -eq 1 ] 
-then
-  cd /
-  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-  curl -LO $PB_REL/download/v21.5/protoc-21.5-linux-x86_64.zip
-  unzip -o /protoc-21.5-linux-x86_64.zip -d /usr/local/
-fi
-
-"""
-
-dbutils.fs.put("dbfs:/FileStore/install_proto.sh", init_script_contents, True)
-
-# COMMAND ----------
-
-# MAGIC %sh
-# MAGIC 
-# MAGIC . /dbfs/FileStore/install_proto.sh
-
-# COMMAND ----------
-
-# DBTITLE 1,Get Confluent Registry and Kafka related secrets
-SR_URL = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_URL")
-SR_API_KEY = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_KEY")
-SR_API_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_SECRET")
-KAFKA_KEY = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_KEY")
-KAFKA_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_SECRET")
-KAFKA_SERVER = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_SERVER")
-KAFKA_TOPIC = dbutils.secrets.get(scope = "protobuf-prototype", key = "KAFKA_TOPIC")
-
-# COMMAND ----------
-
-# DBTITLE 1,Prepare config dictionaries, as expected by the confluent library
-# Required connection configs for Kafka producer, consumer, and admin
-
-config = {
-  "bootstrap.servers": f"{KAFKA_SERVER}",
-  "security.protocol": "SASL_SSL",
-  "sasl.mechanisms": "PLAIN",
-  "sasl.username": f"{KAFKA_KEY}",
-  "sasl.password": f"{KAFKA_SECRET}",
-  "session.timeout.ms": "45000"
-}  
-
-schema_registry_conf = {
-    'url': SR_URL,
-    'basic.auth.user.info': '{}:{}'.format(SR_API_KEY, SR_API_SECRET)}
-
-# COMMAND ----------
-
-from confluent_kafka import SerializingProducer
-from confluent_kafka.admin import AdminClient, NewTopic
-from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
-from confluent_kafka.schema_registry.protobuf import ProtobufSerializer
-
-import os, sys
-import importlib
-
-# COMMAND ----------
-
-# DBTITLE 1,A helper function used to "evolve" the protobuf schema
-def get_schema_str(version):
-  extras = list()
-  for i in range(0, version + 1):
-    extras.append(f"  optional float measure{i} = {i + 5};")
-    
-  return protodef.format(version=version, extras=("\n".join(extras)))
-
-# COMMAND ----------
-
-# DBTITLE 1,Simulate an instance of the target class after compiling the protobuf schema
-def generate_proto(schema_str, version_id):
-  mod_name = f'destination_{version_id}_pb2'
-  if (mod_name in sys.modules):
-    del sys.modules[mod_name]
-    del mod_name
-
-  schema = Schema(schema_str, "PROTOBUF", list())
-  tdir = "/tmp"
-  fname = f"destination_{version_id}.proto"
-  fpath = f"{tdir}/{fname}"
-  f = open(fpath, "w")
-  f.write(schema_str)
-  f.close()
-  cmd = f"protoc -I={tdir} --python_out={tdir} {fpath}"
-  retval = os.system(cmd)
-  sys.path.insert(0, '/tmp')
-  print(f"retval={retval} for cmd={cmd} for schema_str={schema_str}")
-  if retval != 0:
-    raise Exception("Protobuf compilation failed. Fix this before proceeding.")
+# DBTITLE 1,Create the Kafka topic
+  admin_client = AdminClient(config)
   
-  pkg = importlib.import_module(mod_name)
-  person = pkg.Person(
-    id = (1234 + version_id), 
-    name = f"John{version_id} Doe", 
-    email = f"jdoe{version_id}@example.com", 
-    quantity = (5678 + version_id)
-  )
-  setattr(person, f"measure{version_id}", version)
-  
-  return (pkg, person)
-
-# COMMAND ----------
-
-schema_registry_client = SchemaRegistryClient(schema_registry_conf)
-
-# COMMAND ----------
-
-# DBTITLE 1,Create the Kafka topic for the simulation
-a = AdminClient(config)
-
-fs = a.create_topics([NewTopic(
-     KAFKA_TOPIC,
+  fs = admin_client.create_topics([NewTopic(
+     WRAPPER_TOPIC,
      num_partitions=1,
      replication_factor=3
-)])
+  )])
 
 # COMMAND ----------
 
-# DBTITLE 1,Send simulated payload messages (with evolving schema) to Kafka
+# DBTITLE 1,Create notebook widgets
+dbutils.widgets.dropdown(
+  name="num_records", 
+  label="Number of Records per Game to Generate", 
+  defaultValue="100", 
+  choices=["100", "500", "1000", "5000", "10000"]
+)
+
+dbutils.widgets.dropdown(
+  name="num_versions", 
+  label="Number of Versions per Game to Generate", 
+  defaultValue="2", 
+  choices=["1", "2", "3", "4", "5"]
+)
+
+# COMMAND ----------
+
+NUM_GAMES = len(GAMES_ARRAY)
+NUM_RECORDS = int(dbutils.widgets.get("num_records"))
+NUM_VERSIONS = int(dbutils.widgets.get("num_versions"))
+
+# COMMAND ----------
+
+import pyspark.sql.functions as F
+from pyspark.sql.protobuf.functions import to_protobuf
+from faker import Faker
+
+# COMMAND ----------
+
+Faker.seed(999)
+fake = Faker()
+
+# COMMAND ----------
+
+# Registry UDFs used by the simulator
+fake_username = udf(fake.user_name)
+fake_mac = udf(fake.mac_address)
+fake_text = udf(fake.text)
+
+# COMMAND ----------
+
+# Used to track if a protobuf schema has already been registered in the Schema Registru
+REGISTERED_SCHEMAS = {}
+
+# COMMAND ----------
+
+"""
+Generate fake records for a given game
+"""
+def generate_game_records(game_name, num_records, num_versions):
+  proto_schema_arr = ["string game_name =1;", "string gamer_id =2;", 
+                      "google.protobuf.Timestamp event_timestamp =3;", 
+                      "string device_id =4;"]
+
+  # To simulate schema evolution, newer versions get an additional column added
+  for v in range(0, num_versions):
+    proto_schema_arr.append(f"optional string col_custom_{v} ={int(v + 5)};") 
+
+  # Construct the final protobuf schema definition
+  proto_schema_str = str("\n".join(proto_schema_arr))
+  proto_schema_str = f"""syntax = "proto3";
+     import 'google/protobuf/timestamp.proto';
+     
+     message event {{
+       {proto_schema_str}
+     }}
+  """
+  if proto_schema_str not in REGISTERED_SCHEMAS:
+    schema_id = register_schema(WRAPPER_TOPIC, proto_schema_str)
+    REGISTERED_SCHEMAS[proto_schema_str] = schema_id  
+
+  df = spark.range(num_records)
+  df = df.withColumn("game_name", F.lit(game_name))
+  df = df.withColumn("gamer_id", fake_username())
+  df = df.withColumn("event_timestamp", F.current_timestamp())
+  df = df.withColumn("device_id", fake_mac())
+  for v in range(0, num_versions):
+    df = df.withColumn(f"col_custom_{v}", fake_text())
+  df = df.drop("id")
+  
+  return df
+
+# COMMAND ----------
+
+sr_conf = schema_registry_options.copy()
+sr_conf["schema.registry.subject"] = f"{WRAPPER_TOPIC}-value"
+
+# COMMAND ----------
+
+sc.setJobDescription("Write simulated records to Kafka")
 for version in range(0, NUM_VERSIONS):
-  print(f"prep version {version}")
-  schema_str = get_schema_str(version)
-  # print(schema_str)
-  (pkg, protoclass) = generate_proto(schema_str, version)
-  person = getattr(pkg, 'Person')
-  ser = ProtobufSerializer(person, schema_registry_client, {'use.deprecated.format': False})
-  config['value.serializer'] = ser
-  producer = SerializingProducer(config)
-  for rec in range(0, NUM_RECORDS_PER_VERSION):
-    print(f"publishing {str(protoclass)}")
-    ret = producer.produce(KAFKA_TOPIC, key=f"{version}.{rec}", value=protoclass)
-  producer.flush()
+  df = None
+  for game_num in range(0, NUM_GAMES):
+    i_df = generate_game_records(GAMES_ARRAY[game_num], NUM_RECORDS, version)
+    if df == None:
+      df = i_df
+    else:
+      df = df.union(i_df)
 
-# COMMAND ----------
+  df = df.selectExpr("struct(*) as structs")
+  df = df.withColumn("payload", to_protobuf("structs", options = sr_conf))
+  df = df.selectExpr("'game_event' as key", "cast(payload as string) as value")
 
-
+  (
+    df
+      .write
+      .format("kafka")
+      .option("topic", WRAPPER_TOPIC)
+      .option("kafka.bootstrap.servers", KAFKA_SERVER)
+      .option("kafka.security.protocol", "SASL_SSL")
+      .option("kafka.sasl.jaas.config", 
+              "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';".format(
+              KAFKA_KEY, KAFKA_SECRET))
+      .option("kafka.ssl.endpoint.identification.algorithm", "https")
+      .option("kafka.sasl.mechanism", "PLAIN")
+      .save()
+  )

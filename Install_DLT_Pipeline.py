@@ -3,32 +3,16 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install confluent_kafka
+
+# COMMAND ----------
+
+# MAGIC %run "./Common"
+
+# COMMAND ----------
+
 # DBTITLE 1,Delta Live Pipeline name will be "Protobuf Example_<your user>"
-my_name = spark.sql("select current_user()").collect()[0][0]
-my_name = my_name[:my_name.rfind('@')].replace(".", "_")
-
-PIPELINE_NAME = f"Protobuf Example_{my_name}"
-
-# COMMAND ----------
-
-TARGET_SCHEMA = dbutils.secrets.get(scope = "protobuf-prototype", key = "TARGET_SCHEMA")
-
-# COMMAND ----------
-
-# DBTITLE 1,Prepare an 'init script' that will manage installing protoc
-init_script_contents = """
-#!/bin/sh
-PC=`which protoc`
-if [ $? -eq 1 ] 
-then
-  cd /
-  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-  curl -LO $PB_REL/download/v21.5/protoc-21.5-linux-x86_64.zip
-  unzip -o /protoc-21.5-linux-x86_64.zip -d /usr/local/
-fi
-"""
-
-dbutils.fs.put("dbfs:/FileStore/install_proto.sh", init_script_contents, True)
+PIPELINE_NAME = f"Protobuf_Games_Demo_{my_name}"
 
 # COMMAND ----------
 
@@ -55,34 +39,23 @@ dlt_nb_path = nb_context.notebookPath().getOrElse(None).replace("Install_DLT_Pip
 # DBTITLE 1,Use Databricks API to register and start the DLT Pipeline
 retval = pipelines_api.create(
   settings = {
-    "name": PIPELINE_NAME, 
+    "name": PIPELINE_NAME,
+    "catalog": CATALOG,
     "target": TARGET_SCHEMA,
+    "configuration": {
+        "games": f"{','.join(GAMES_ARRAY)}",
+        "kafka_topic": WRAPPER_TOPIC
+    },
     "development": True, 
     "continuous": True, 
+    "channel": "PREVIEW",
     "libraries": [
       {
         "notebook": {
           "path": dlt_nb_path
         }
       }
-    ],
-    "clusters": [
-          {
-              "label": "default",
-              "init_scripts": [
-                  {
-                      "dbfs": {
-                          "destination": "dbfs:/FileStore/install_protoc.sh"
-                      }
-                  }
-              ],
-              "autoscale": {
-                  "min_workers": 1,
-                  "max_workers": 2,
-                  "mode": "LEGACY"
-              }
-          }
-      ]
+    ]
     },
     settings_dir=None, 
     allow_duplicate_names=False
