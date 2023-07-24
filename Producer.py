@@ -28,13 +28,13 @@
 # COMMAND ----------
 
 # DBTITLE 1,Create the Kafka topic
-  admin_client = AdminClient(config)
-  
-  fs = admin_client.create_topics([NewTopic(
-     WRAPPER_TOPIC,
-     num_partitions=1,
-     replication_factor=3
-  )])
+admin_client = AdminClient(config)
+
+fs = admin_client.create_topics([NewTopic(
+    WRAPPER_TOPIC,
+    num_partitions=1,
+    replication_factor=3
+)])
 
 # COMMAND ----------
 
