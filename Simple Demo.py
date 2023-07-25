@@ -22,18 +22,18 @@ my_name = my_name[:my_name.rfind('@')].replace(".", "_")
 
 # COMMAND ----------
 
+# DBTITLE 1,Notice the new package pyspark.sql.protobuf.functions
+import pyspark.sql.functions as F
+import pyspark.sql.protobuf.functions as PF
+
+# COMMAND ----------
+
 # DBTITLE 0,Create some fake data using Faker
 df_fake_data = spark.range(10000)
 df_fake_data = df_fake_data.withColumn("name", F.udf(fake_generator.name)())
 df_fake_data = df_fake_data.withColumn("address", F.udf(fake_generator.address)())
 df_fake_data = df_fake_data.withColumn("uuid", F.udf(fake_generator.uuid4)())
 df_fake_data = df_fake_data.selectExpr("struct(*) as event")
-
-# COMMAND ----------
-
-# DBTITLE 1,Notice the new package pyspark.sql.protobuf.functions
-import pyspark.sql.functions as F
-import pyspark.sql.protobuf.functions as PF
 
 # COMMAND ----------
 
@@ -95,6 +95,7 @@ df_fake_data = df_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("ev
 # MAGIC ```Required configuration schema.registry.subject is missing in options.```
 # MAGIC
 # MAGIC When we look back at the code, we were missing an essential input: `options`:
+# MAGIC
 # MAGIC ```df_fake_data = df_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("events")))``` 
 # MAGIC
 # MAGIC ## Why are options necessary?
@@ -174,14 +175,17 @@ df_fake_data = df_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("ev
 # MAGIC
 # MAGIC ## Let's review the error
 # MAGIC ```
-# MAGIC Schema from schema registry could not be initialized. Error while fetching schema for subject 'app-events-value' from the registry: Subject 'app-events-value' not found.; error code: 40401.
+# MAGIC Schema from schema registry could not be initialized. Error while fetching schema 
+# MAGIC for subject 'app-events-value' from the registry: Subject 'app-events-value' not found.; error code: 40401.
 # MAGIC ```
 # MAGIC
 # MAGIC ## The schema has to exist first!
 # MAGIC To solve the error, the schema needs to first be registered with the Schema Registry. 
 # MAGIC
 # MAGIC ## What is `subject 'app-events-value'`?
-# MAGIC The TOPIC we used is `app-events`, so what is `app-events-value` all about? The answer lies in the fact that, in Kafaka, each message is composed of a VALUE and a KEY. Thus, a message's key can have its own schema registered in the Schema Registry. For our needs, we will only have to worry about the `app-events-value` schema.
+# MAGIC What is `app-events-value` all about? In Kafaka, each message is composed of a VALUE and a KEY. Thus, a message's key can have its own schema registered in the Schema Registry. For our needs, we will only have to worry about the `app-events-value` schema.
+# MAGIC
+# MAGIC Key point: One Kafka topic may be configured to have 0, 1 or 2 schemas associated with the topic
 
 # COMMAND ----------
 
@@ -207,7 +211,11 @@ config = {
 
 # COMMAND ----------
 
-from confluent_kafka.admin import AdminClient
+from confluent_kafka.admin import AdminClient, NewTopic
+
+# COMMAND ----------
+
+df_fake_data.printSchema()
 
 # COMMAND ----------
 
@@ -242,7 +250,7 @@ schema_registry_client = SchemaRegistryClient(schema_registry_conf_confluent)
 
 # COMMAND ----------
 
-# DBTITLE 1,Register the schema with Confluent Schema Registr
+# DBTITLE 1,Register the schema with Confluent Schema Registry
 p_schema = Schema(protodef, "PROTOBUF", list())
 schema_registry_client.register_schema(subject_name="app-events-value", schema=p_schema)
 
@@ -291,7 +299,7 @@ display(df_read_stream.select("deserialized_event"))
 # MAGIC # Schema evolution demo
 # MAGIC Now let's add a new field to the schema. We'll add the new field: `email` and, since we're adding a field, we can rest assured that the schema change is compatible.
 # MAGIC
-# MAGIC ## Note: Compatibility settings
+# MAGIC ### Note: Compatibility settings
 # MAGIC Confluent's Schema Registry allows you to choose from a number of compatibility settings. "Backward" is the default. The definition: "Consumers using the new schema can read data written by producers using the latest registered schema."
 
 # COMMAND ----------
@@ -319,24 +327,172 @@ schema_registry_client.register_schema(subject_name="app-events-value", schema=p
 # COMMAND ----------
 
 # DBTITLE 1,Produce some new fake data (that includes the new email field)
-df_fake_data = spark.range(10000)
-df_fake_data = df_fake_data.withColumn("name", F.udf(fake_generator.name)())
-df_fake_data = df_fake_data.withColumn("address", F.udf(fake_generator.address)())
-df_fake_data = df_fake_data.withColumn("uuid", F.udf(fake_generator.uuid4)())
-df_fake_data = df_fake_data.withColumn("email", F.udf(fake_generator.email)())
-df_fake_data = df_fake_data.selectExpr("struct(*) as event")
+df_evolved_fake_data = spark.range(10000)
+df_evolved_fake_data = (
+  df_evolved_fake_data
+    .withColumn("name", F.udf(fake_generator.name)())
+    .withColumn("address", F.udf(fake_generator.address)())
+    .withColumn("uuid", F.udf(fake_generator.uuid4)())
+    .withColumn("email", F.udf(fake_generator.email)())
+    .selectExpr("struct(*) as event")
+)
 
 # COMMAND ----------
 
-df_fake_data = df_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("event"), options = schema_registry_conf))
+df_evolved_fake_data = df_evolved_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("event"), options = schema_registry_conf))
 
 # COMMAND ----------
 
 # DBTITLE 1,Save the new data and scroll back up to review the streaming data
 (
-  df_fake_data
+  df_evolved_fake_data
     .select("proto_payload")
     .writeTo(f"proto_demo_{my_name}")
     .option("mergeSchema", True)
     .append()
 )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Streaming with Kafka & DLT
+
+# COMMAND ----------
+
+# DBTITLE 1,First, we need to create the Kafka topic...
+admin_client = AdminClient(config)
+
+fs = admin_client.create_topics([NewTopic(
+    "app-events",
+    num_partitions=1,
+    replication_factor=3
+)])
+
+# COMMAND ----------
+
+# DBTITLE 1,Let's check to make sure that we created the topic...
+t_dict = admin_client.list_topics()
+t_topics = t_dict.topics
+t_list = [key for key in t_topics]
+if len(t_list) > 0:
+  print(t_list)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## What do you notice in the Confluent UI?
+# MAGIC The topic has the schema associated with it! Why did that happen?
+
+# COMMAND ----------
+
+# DBTITLE 1,Publish messages to Kafka
+(
+  spark.read.table(f"proto_demo_{my_name}")
+    .selectExpr("'game_event' as key", "cast(proto_payload as string) as value")
+    .write.format("kafka")
+    .option("topic", "app-events")
+    .option("kafka.bootstrap.servers", KAFKA_SERVER)
+    .option("kafka.security.protocol", "SASL_SSL")
+    .option("kafka.sasl.jaas.config", 
+            f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{KAFKA_KEY}' password='{KAFKA_SECRET}';")
+    .option("kafka.ssl.endpoint.identification.algorithm", "https")
+    .option("kafka.sasl.mechanism", "PLAIN")
+    .save()
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # DLT
+# MAGIC * Run the 'Simple Demo' notebook as a Continuous pipeline
+# MAGIC * Review the DLT code
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Evolve the schema further
+# MAGIC We'll add another field to the schema, publish some new messages and look at our DLT pipeline
+
+# COMMAND ----------
+
+# DBTITLE 1,We're adding a new field: ipv4_public
+protodef = """
+syntax = "proto3";
+
+package demo;
+
+message event {
+  optional int64 id = 1;
+  optional string name = 2;
+  optional string address = 3;
+  optional string uuid = 4;
+  optional string email = 5;
+  optional string ipv4_public = 6;
+}
+"""
+
+# COMMAND ----------
+
+p_schema = Schema(protodef, "PROTOBUF", list())
+schema_registry_client.register_schema(subject_name="app-events-value", schema=p_schema)
+
+# COMMAND ----------
+
+# DBTITLE 1,Create more fake data (including the new ipv4_public field)
+df_evolved_fake_data = spark.range(10000)
+df_evolved_fake_data = (
+  df_evolved_fake_data
+    .withColumn("name", F.udf(fake_generator.name)())
+    .withColumn("address", F.udf(fake_generator.address)())
+    .withColumn("uuid", F.udf(fake_generator.uuid4)())
+    .withColumn("email", F.udf(fake_generator.email)())
+    .withColumn("ipv4_public", F.udf(fake_generator.ipv4_public)())
+    .selectExpr("struct(*) as event")
+)
+
+df_evolved_fake_data = df_evolved_fake_data.withColumn("proto_payload", PF.to_protobuf(F.col("event"), options = schema_registry_conf))
+
+# COMMAND ----------
+
+# DBTITLE 1,Publish the new data to Kafka
+(
+  df_evolved_fake_data
+    .selectExpr("'game_event' as key", "cast(proto_payload as string) as value")
+    .write.format("kafka")
+    .option("topic", "app-events")
+    .option("kafka.bootstrap.servers", KAFKA_SERVER)
+    .option("kafka.security.protocol", "SASL_SSL")
+    .option("kafka.sasl.jaas.config", 
+            f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{KAFKA_KEY}' password='{KAFKA_SECRET}';")
+    .option("kafka.ssl.endpoint.identification.algorithm", "https")
+    .option("kafka.sasl.mechanism", "PLAIN")
+    .save()
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # What happened to the DLT pipeline as the schema evolved?
+# MAGIC It failed. Using "Production" mode will result in the pipeline restarting. In "Development" mode, the pipeline will die.
+
+# COMMAND ----------
+
+# DBTITLE 1,Clean up
+if False: # Change to True to clean up schemas and topics in Kafka and to drop the table
+  subjects = schema_registry_client.get_subjects()
+  for subject in subjects:
+    print(f"Removing schema {subject}")
+    schema_registry_client.delete_subject(subject, True)
+    
+  t_dict = admin_client.list_topics()
+  t_topics = t_dict.topics
+  t_list = [key for key in t_topics]
+  if len(t_list) > 0:
+    print(f"Removing topics {t_list}")
+    admin_client.delete_topics(t_list)
+
+spark.table(f"proto_demo_{my_name}").drop()
+
+# COMMAND ----------
+
+
