@@ -478,7 +478,7 @@ df_evolved_fake_data = df_evolved_fake_data.withColumn("proto_payload", PF.to_pr
 # COMMAND ----------
 
 # DBTITLE 1,Clean up
-if False: # Change to True to clean up schemas and topics in Kafka and to drop the table
+if True: # Change to True to clean up schemas and topics in Kafka and to drop the table
   subjects = schema_registry_client.get_subjects()
   for subject in subjects:
     print(f"Removing schema {subject}")
@@ -495,4 +495,4 @@ spark.table(f"proto_demo_{my_name}").drop()
 
 # COMMAND ----------
 
-
+  

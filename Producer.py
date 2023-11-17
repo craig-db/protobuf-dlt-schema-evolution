@@ -79,7 +79,7 @@ fake_text = udf(fake.text)
 
 # COMMAND ----------
 
-# Used to track if a protobuf schema has already been registered in the Schema Registru
+# Used to track if a protobuf schema has already been registered in the Schema Registry
 REGISTERED_SCHEMAS = {}
 
 # COMMAND ----------
