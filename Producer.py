@@ -27,8 +27,12 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Imports
 from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
 from confluent_kafka.admin import AdminClient, NewTopic
+import pyspark.sql.functions as F
+from pyspark.sql.protobuf.functions import to_protobuf
+from faker import Faker
 
 # COMMAND ----------
 
@@ -60,35 +64,31 @@ dbutils.widgets.dropdown(
 
 # COMMAND ----------
 
+# DBTITLE 1,Set simulator variables
 NUM_GAMES = len(GAMES_ARRAY)
 NUM_RECORDS = int(dbutils.widgets.get("num_records"))
 NUM_VERSIONS = int(dbutils.widgets.get("num_versions"))
 
 # COMMAND ----------
 
-import pyspark.sql.functions as F
-from pyspark.sql.protobuf.functions import to_protobuf
-from faker import Faker
-
-# COMMAND ----------
-
+# DBTITLE 1,Use Faker to generate fake data via UDFs
 Faker.seed(999)
 fake = Faker()
 
-# COMMAND ----------
-
-# Registry UDFs used by the simulator
+# Register UDFs used by the simulator
 fake_username = udf(fake.user_name)
 fake_mac = udf(fake.mac_address)
 fake_text = udf(fake.text)
 
 # COMMAND ----------
 
+# DBTITLE 1,Used to track schemas that have already been registered with the Schema Registry
 # Used to track if a protobuf schema has already been registered in the Schema Registry
 REGISTERED_SCHEMAS = {}
 
 # COMMAND ----------
 
+# DBTITLE 1,Function to create schema in the Confluent Schema Registry
 def register_schema(topic, schema):
   schema_registry_client = SchemaRegistryClient(schema_registry_conf)
   k_schema = Schema(schema, "PROTOBUF", list())
@@ -97,8 +97,14 @@ def register_schema(topic, schema):
 
 # COMMAND ----------
 
+# DBTITLE 1,Generate fake data for a game
 """
 Generate fake records for a given game
+
+Parameters:
+  game_name(str): game name
+  num_records(int): number of fake records to generate
+  num_versions(int): how many columns to include (used to simulate schema evolution)
 """
 def generate_game_records(game_name, num_records, num_versions):
   proto_schema_arr = ["string game_name =1;", "string gamer_id =2;", 
@@ -135,12 +141,13 @@ def generate_game_records(game_name, num_records, num_versions):
 
 # COMMAND ----------
 
+# DBTITLE 1,Adjust the topic (to reflect we're working with the stream's value data, not the key)
 sr_conf = schema_registry_options.copy()
 sr_conf["schema.registry.subject"] = f"{WRAPPER_TOPIC}-value"
 
 # COMMAND ----------
 
-# sc.setJobDescription("Write simulated records to Kafka")
+# DBTITLE 1,Generate multiple versions of schemas for the variety of games
 for version in range(0, NUM_VERSIONS):
   df = None
   for game_num in range(0, NUM_GAMES):
@@ -168,7 +175,3 @@ for version in range(0, NUM_VERSIONS):
       .option("kafka.sasl.mechanism", "PLAIN")
       .save()
   )
-
-# COMMAND ----------
-
-
