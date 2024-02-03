@@ -5,10 +5,12 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Confluent library to delete the Kafka topic
 # MAGIC %pip install --upgrade  confluent_kafka
 
 # COMMAND ----------
 
+# DBTITLE 1,Common variables / secrets
 # MAGIC %run "./Common"
 
 # COMMAND ----------

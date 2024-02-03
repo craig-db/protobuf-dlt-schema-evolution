@@ -1,16 +1,20 @@
 # Databricks notebook source
+# DBTITLE 1,DLT is Databricks flagship ETL framework
 import dlt
 
 # COMMAND ----------
 
+# DBTITLE 1,Kafka topic
 WRAPPER_TOPIC = spark.conf.get("kafka_topic")
 
 # COMMAND ----------
 
+# DBTITLE 1,The game data will consist of the games passed in a variable to the pipeline
 GAMES_ARRAY = spark.conf.get("games").split(",")
 
 # COMMAND ----------
 
+# DBTITLE 1,Get secrets for the Confluent connections
 #
 # We avoid hard-coding URLs, keys, secrets, etc. by using Databricks Secrets. 
 # Read about it here: https://docs.databricks.com/security/secrets/index.html
@@ -28,20 +32,21 @@ SR_API_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_
 
 # COMMAND ----------
 
+# DBTITLE 1,Setup the parameters needed to connect to Kafka and the Schema Registry
 #
 # Kafka configuration
 #
 # Confluent recommends SASL/GSSAPI or SASL/SCRAM for production deployments. Here, instead, we use
 # SASL/PLAIN. Read more on Confluent security here: 
 # https://docs.confluent.io/platform/current/security/security_tutorial.html#security-tutorial
-config = {
-  "bootstrap.servers": f"{KAFKA_SERVER}",
-  "security.protocol": "SASL_SSL",
-  "sasl.mechanisms": "PLAIN",
-  "sasl.username": f"{KAFKA_KEY}",
-  "sasl.password": f"{KAFKA_SECRET}",  
-  "session.timeout.ms": "45000"
-}  
+kafka_options = {
+    "kafka.bootstrap.servers": KAFKA_SERVER,
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.jaas.config": f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{KAFKA_KEY}' password='{KAFKA_SECRET}';",
+    "kafka.ssl.endpoint.identification.algorithm": "https",
+    "kafka.sasl.mechanism": "PLAIN",
+    "subscribe": WRAPPER_TOPIC,
+}
 
 schema_registry_options = {
   "schema.registry.subject" : f"{WRAPPER_TOPIC}-value",
@@ -58,28 +63,22 @@ from pyspark.sql.protobuf.functions import from_protobuf
 
 # COMMAND ----------
 
-# DBTITLE 1,The source view, consuming the Kafka messages and decoding the Schema Id of the payload
+# DBTITLE 1,The source bronze view, consuming the Kafka messages and deserializing the protobuf messages with from_protobuf
 @dlt.view
 def bronze_events():
   return (
     spark
     .readStream
     .format("kafka")
-    .option("kafka.bootstrap.servers", KAFKA_SERVER)
-    .option("kafka.security.protocol", "SASL_SSL")
-    .option("kafka.sasl.jaas.config", "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username='{}' password='{}';".format(KAFKA_KEY, KAFKA_SECRET))
-    .option("kafka.ssl.endpoint.identification.algorithm", "https")
-    .option("kafka.sasl.mechanism", "PLAIN")
-    .option("subscribe", WRAPPER_TOPIC)
+    .options(**kafka_options)
     .load()
-    # The `binary_to_string` UDF helps to extract the Schema Id of each payload:
     .withColumn('decoded', from_protobuf(F.col("value"), options = schema_registry_options))
     .selectExpr("decoded.*")
   )
 
 # COMMAND ----------
 
-# DBTITLE 1,Gold table with the transformed protobuf messages, surfaced in a Delta table
+# DBTITLE 1,Silver Delta tables for each game. Notice the "for" loop and how it simplifies creating a number of tables at once
 for game in GAMES_ARRAY:
   @dlt.table(
     name = f"silver_{game}_events"
@@ -89,6 +88,7 @@ for game in GAMES_ARRAY:
 
 # COMMAND ----------
 
+# DBTITLE 1,Likewise, a loop creates the gold, materialized views for all the games
 for game in GAMES_ARRAY:
   @dlt.table(
     name = f"gold_{game}_player_agg"
@@ -98,6 +98,6 @@ for game in GAMES_ARRAY:
       select gamer_id, count(event_timestamp) event_count, 
              max(event_timestamp) max_event_timestamp, 
              min(event_timestamp) min_event_timestamp
-        from STREAMING(LIVE.silver_{game}_eventsWRAPPER_TOPIC = "protobuf_game_stream")
+        from LIVE.silver_{game}_events
         group by gamer_id
     """)

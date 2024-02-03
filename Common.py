@@ -1,18 +1,34 @@
 # Databricks notebook source
-CATALOG = "craig_lukasik" # Protobuf_Games_Demo_{my_name}
+# DBTITLE 1,Get your name
+my_name = spark.sql("select current_user()").collect()[0][0]
+my_name = my_name[:my_name.rfind('@')].replace(".", "_")
 
 # COMMAND ----------
 
+# DBTITLE 1,Unique names for your catalog and schema
+CATALOG = f"Protobuf_Games_Demo_{my_name}"
+TARGET_SCHEMA = f"protobuf_demo_{my_name}"
+
+# COMMAND ----------
+
+# DBTITLE 1,You should have permission to create a catalog. If not, adjust CATALOG and TARGET_SCHEMA variables (set in previous cell)
+spark.sql(f"create catalog if not exists {CATALOG}")
+
+# COMMAND ----------
+
+# DBTITLE 1,The Kafka topic used for this demo
 WRAPPER_TOPIC = "protobuf_game_stream"
 
 # COMMAND ----------
 
+# DBTITLE 1,The games in the demo. Big hits (in the 1950s, perhaps)
 GAMES_ARRAY = [
   "rummy", "spades", "euchre", "go_fish", "uno", "hearts", "poker"
 ]
 
 # COMMAND ----------
 
+# DBTITLE 1,Secrets... shh!
 SR_URL = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_URL")
 SR_API_KEY = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_KEY")
 SR_API_SECRET = dbutils.secrets.get(scope = "protobuf-prototype", key = "SR_API_SECRET")
@@ -31,6 +47,7 @@ config = {
 
 # COMMAND ----------
 
+# DBTITLE 1,Setup Kafka and Schema Registry connection parameters
 schema_registry_options = {
   "schema.registry.subject" : f"{WRAPPER_TOPIC}",
   "schema.registry.address" : f"{SR_URL}",
@@ -42,29 +59,3 @@ schema_registry_conf = {
   "url": SR_URL,
   "basic.auth.user.info": '{}:{}'.format(SR_API_KEY, SR_API_SECRET)
 }
-
-# COMMAND ----------
-
-from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
-from confluent_kafka.admin import AdminClient, NewTopic
-
-# COMMAND ----------
-
-admin_client = AdminClient(config)
-
-# COMMAND ----------
-
-def register_schema(topic, schema):
-  schema_registry_client = SchemaRegistryClient(schema_registry_conf)
-  k_schema = Schema(schema, "PROTOBUF", list())
-  schema_id = int(schema_registry_client.register_schema(f"{topic}-value", k_schema))
-  schema_registry_client.set_compatibility(subject_name=f"{topic}-value", level="FULL")
-
-# COMMAND ----------
-
-my_name = spark.sql("select current_user()").collect()[0][0]
-my_name = my_name[:my_name.rfind('@')].replace(".", "_")
-
-# COMMAND ----------
-
-TARGET_SCHEMA = f"protobuf_demo_{my_name}"

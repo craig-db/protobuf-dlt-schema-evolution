@@ -22,8 +22,13 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,This runs code from another notebook
+# DBTITLE 1,Set common variables and secret values
 # MAGIC %run "./Common"
+
+# COMMAND ----------
+
+from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
+from confluent_kafka.admin import AdminClient, NewTopic
 
 # COMMAND ----------
 
@@ -84,6 +89,14 @@ REGISTERED_SCHEMAS = {}
 
 # COMMAND ----------
 
+def register_schema(topic, schema):
+  schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+  k_schema = Schema(schema, "PROTOBUF", list())
+  schema_id = int(schema_registry_client.register_schema(f"{topic}-value", k_schema))
+  schema_registry_client.set_compatibility(subject_name=f"{topic}-value", level="FULL")
+
+# COMMAND ----------
+
 """
 Generate fake records for a given game
 """
@@ -127,7 +140,7 @@ sr_conf["schema.registry.subject"] = f"{WRAPPER_TOPIC}-value"
 
 # COMMAND ----------
 
-sc.setJobDescription("Write simulated records to Kafka")
+# sc.setJobDescription("Write simulated records to Kafka")
 for version in range(0, NUM_VERSIONS):
   df = None
   for game_num in range(0, NUM_GAMES):
@@ -155,3 +168,7 @@ for version in range(0, NUM_VERSIONS):
       .option("kafka.sasl.mechanism", "PLAIN")
       .save()
   )
+
+# COMMAND ----------
+
+

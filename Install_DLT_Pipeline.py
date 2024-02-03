@@ -1,12 +1,10 @@
 # Databricks notebook source
+# DBTITLE 1,The Databricks CLI lib will help with API calls to install the DLT pipeline
 # MAGIC %pip install databricks_cli
 
 # COMMAND ----------
 
-# MAGIC %pip install confluent_kafka
-
-# COMMAND ----------
-
+# DBTITLE 1,Common variables and secrets...
 # MAGIC %run "./Common"
 
 # COMMAND ----------
@@ -16,16 +14,14 @@ PIPELINE_NAME = f"Protobuf_Games_Demo_{my_name}"
 
 # COMMAND ----------
 
+# DBTITLE 1,Databricks API-related libraries
 from databricks_cli.sdk.api_client import ApiClient
 from databricks_cli.pipelines.api import PipelinesApi
 
 # COMMAND ----------
 
+# DBTITLE 1,Intitialize Client
 nb_context = dbutils.entry_point.getDbutils().notebook().getContext()
-
-# COMMAND ----------
-
-#Intitialize Client
 api_client = ApiClient(token = nb_context.apiToken().get(), host = nb_context.apiUrl().get())
 pipelines_api = PipelinesApi(api_client)
 
@@ -63,8 +59,5 @@ retval = pipelines_api.create(
 
 # COMMAND ----------
 
+# DBTITLE 1,Note the DLT pipeline ID
 print(retval)
-
-# COMMAND ----------
-
-
