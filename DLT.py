@@ -5,12 +5,12 @@ import dlt
 # COMMAND ----------
 
 # DBTITLE 1,Kafka topic
-WRAPPER_TOPIC = spark.conf.get("kafka_topic")
+WRAPPER_TOPIC = spark.conf.get("kafka_topic", "game-stream")
 
 # COMMAND ----------
 
 # DBTITLE 1,The game data will consist of the games passed in a variable to the pipeline
-GAMES_ARRAY = spark.conf.get("games").split(",")
+GAMES_ARRAY = spark.conf.get("games", "spades,hearts,blackjack").split(",")
 
 # COMMAND ----------
 
@@ -67,9 +67,7 @@ from pyspark.sql.protobuf.functions import from_protobuf
 @dlt.view
 def bronze_events():
   return (
-    spark
-    .readStream
-    .format("kafka")
+    spark.readStream.format("kafka")
     .options(**kafka_options)
     .load()
     .withColumn('decoded', from_protobuf(F.col("value"), options = schema_registry_options))
@@ -78,26 +76,28 @@ def bronze_events():
 
 # COMMAND ----------
 
-# DBTITLE 1,Silver Delta tables for each game. Notice the "for" loop and how it simplifies creating a number of tables at once
-for game in GAMES_ARRAY:
-  @dlt.table(
-    name = f"silver_{game}_events"
-  )
-  def gold_unified():
-    return dlt.read_stream("bronze_events").where(F.col("game_name") == game)
+# DBTITLE 1,Helper functions to define DLT tables
+def build_silver(gname):
+    @dlt.table(name=f"silver_{gname}_events")
+    def gold_unified():
+        return dlt.read_stream("bronze_events").where(F.col("game_name") == gname)
+      
+def build_gold(gname):
+    @dlt.table(name=f"gold_{gname}_player_agg")
+    def gold_unified():
+        return (
+            dlt.read(f"silver_{gname}_events")
+            .groupBy(["gamer_id"])
+            .agg(
+                F.count("*").alias("session_count"),
+                F.min(F.col("event_timestamp")).alias("min_timestamp"),
+                F.max(F.col("event_timestamp")).alias("max_timestamp")
+            )
+        )
 
 # COMMAND ----------
 
-# DBTITLE 1,Likewise, a loop creates the gold, materialized views for all the games
+# DBTITLE 1,Silver Delta tables for each game. Notice the "for" loop and how it simplifies creating a number of tables at once
 for game in GAMES_ARRAY:
-  @dlt.table(
-    name = f"gold_{game}_player_agg"
-  )
-  def gold_unified():
-    return spark.sql(f"""
-      select gamer_id, count(event_timestamp) event_count, 
-             max(event_timestamp) max_event_timestamp, 
-             min(event_timestamp) min_event_timestamp
-        from LIVE.silver_{game}_events
-        group by gamer_id
-    """)
+    build_silver(game)
+    build_gold(game)

@@ -1,15 +1,9 @@
-# Deprecated
-Databricks now has native support for protobuf: https://docs.databricks.com/structured-streaming/protocol-buffers.html
-
-[from_protobuf](https://docs.databricks.com/structured-streaming/protocol-buffers.html) is much more simple than trying to use the approach detailed below. Feel free to continue to read to learn about protobuf, DLT and other Databricks features.
-
-
 # Delta Live Tables Consuming Protobuf with an Evolving Schema 
-![Overview Databricks Lakehouse Architecture depicting Kafka, Schema Registry, Delta Lake, and Delta Live Tables](./resources/overview.png)
+![Overview Databricks Lakehouse Architecture depicting Kafka, Schema Registry, Delta Lake, and Delta Live Tables]($./resources/overview.png)
 _Descriptions for the numbered, yellow circles are found in the [appendix](#appendix)_
 
 # Learning Objectives
-In this blog post you will learn about:
+In this demo you will learn about:
 * How [protocol buffers](https://developers.google.com/protocol-buffers) ("protobuf") are a compact serialization format
 * How [Delta Live Tables](https://www.databricks.com/product/delta-live-tables) ("DLT") pipelines provide a feature-rich platform for your ETL pipelines
 * How to write a DLT pipeline to consume protobuf values from an Apache Kafka stream.
@@ -32,7 +26,7 @@ This data is often streamed through open source messaging layers to handle the t
 ## Optimizing the Streaming Payload Format
 Databricks Lakehouse provides capabilities that help optimize the AI journey by unifying Business Analysis, Data Science and Data Science activities in a single, governed platform. And when we consider optimizing the end-to-end technology stack, we naturally consider the serialization format of the message payload as one element of the stack subject to optimization.
 
-The remainder of this blog post will focus on using an optimized format, created by Google, called [protocol buffers](https://developers.google.com/protocol-buffers). It will also explain how to harness the power of [Databricks Delta Live Tables](https://www.databricks.com/product/delta-live-tables) for its [autoscaling capabilities](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#databricks-enhanced-autoscaling) and ETL pipeline features, such as [orchestration, cluster management, monitoring, data quality, and error handling](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html). Lastly, this blog post will explore the concept of [schema evolution](https://docs.databricks.com/ingestion/auto-loader/schema.html#how-does-auto-loader-schema-evolution-work) in the context of streaming workloads.
+The remainder of this demo will focus on using an optimized format, created by Google, called [protocol buffers](https://developers.google.com/protocol-buffers). It will also explain how to harness the power of [Databricks Delta Live Tables](https://www.databricks.com/product/delta-live-tables) for its [autoscaling capabilities](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html#databricks-enhanced-autoscaling) and ETL pipeline features, such as [orchestration, cluster management, monitoring, data quality, and error handling](https://docs.databricks.com/workflows/delta-live-tables/delta-live-tables-concepts.html). Lastly, this demo will explore the concept of [schema evolution](https://docs.databricks.com/ingestion/auto-loader/schema.html#how-does-auto-loader-schema-evolution-work) in the context of streaming workloads.
 
 ### What Makes Protobuf an "Optimized" Serialization Format?
 Google enumerates the [advantages of protocol buffers](https://developers.google.com/protocol-buffers/docs/overview) as follows:
