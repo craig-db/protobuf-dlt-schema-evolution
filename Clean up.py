@@ -15,6 +15,10 @@
 
 # COMMAND ----------
 
+from confluent_kafka.schema_registry import SchemaRegistryClient, Schema
+
+# COMMAND ----------
+
 # DBTITLE 1,Delete the schemas from the Schema Registry
 schema_registry_client = SchemaRegistryClient(schema_registry_conf)
 try:
@@ -25,6 +29,9 @@ except Exception as e:
 # COMMAND ----------
 
 # DBTITLE 1,Delete the topic from Kafka
+from confluent_kafka.admin import AdminClient
+
+admin_client = AdminClient(config)
 try:
   admin_client.delete_topics([WRAPPER_TOPIC])
 except Exception as e:

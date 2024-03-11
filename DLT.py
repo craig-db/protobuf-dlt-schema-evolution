@@ -70,7 +70,8 @@ def bronze_events():
     spark.readStream.format("kafka")
     .options(**kafka_options)
     .load()
-    .withColumn('decoded', from_protobuf(F.col("value"), options = schema_registry_options))
+    .withColumn('decoded', from_protobuf(F.col("value"), 
+                           options = schema_registry_options))
     .selectExpr("decoded.*")
   )
 
